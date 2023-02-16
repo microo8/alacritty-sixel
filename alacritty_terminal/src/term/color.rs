@@ -64,9 +64,9 @@ impl Mul<f32> for Rgb {
 
     fn mul(self, rhs: f32) -> Rgb {
         let result = Rgb {
-            r: (f32::from(self.r) * rhs).max(0.0).min(255.0) as u8,
-            g: (f32::from(self.g) * rhs).max(0.0).min(255.0) as u8,
-            b: (f32::from(self.b) * rhs).max(0.0).min(255.0) as u8,
+            r: (f32::from(self.r) * rhs).clamp(0.0, 255.0) as u8,
+            g: (f32::from(self.g) * rhs).clamp(0.0, 255.0) as u8,
+            b: (f32::from(self.b) * rhs).clamp(0.0, 255.0) as u8,
         };
 
         trace!("Scaling RGB by {} from {:?} to {:?}", rhs, self, result);
@@ -119,8 +119,7 @@ impl<'de> Deserialize<'de> for Rgb {
             {
                 Rgb::from_str(value).map_err(|_| {
                     E::custom(format!(
-                        "failed to parse rgb color {}; expected hex color like #ff00ff",
-                        value
+                        "failed to parse rgb color {value}; expected hex color like #ff00ff"
                     ))
                 })
             }
@@ -222,7 +221,7 @@ impl<'de> Deserialize<'de> for CellRgb {
                 }
 
                 Rgb::from_str(value).map(CellRgb::Rgb).map_err(|_| {
-                    E::custom(format!("failed to parse color {}; expected {}", value, EXPECTING))
+                    E::custom(format!("failed to parse color {value}; expected {EXPECTING}"))
                 })
             }
         }

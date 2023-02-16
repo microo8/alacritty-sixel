@@ -3,11 +3,11 @@
 use std::fmt::{self, Debug, Display};
 
 use bitflags::bitflags;
-use glutin::event::VirtualKeyCode::*;
-use glutin::event::{ModifiersState, MouseButton, VirtualKeyCode};
 use serde::de::{self, Error as SerdeError, MapAccess, Unexpected, Visitor};
 use serde::{Deserialize, Deserializer};
 use serde_yaml::Value as SerdeValue;
+use winit::event::VirtualKeyCode::*;
+use winit::event::{ModifiersState, MouseButton, VirtualKeyCode};
 
 use alacritty_config_derive::{ConfigDeserialize, SerdeReplace};
 
@@ -714,7 +714,7 @@ pub fn platform_key_bindings() -> Vec<KeyBinding> {
             Action::Esc("\x0c".into());
         K, ModifiersState::LOGO, ~BindingMode::VI, ~BindingMode::SEARCH;  Action::ClearHistory;
         V, ModifiersState::LOGO, ~BindingMode::VI; Action::Paste;
-        N, ModifiersState::LOGO; Action::SpawnNewInstance;
+        N, ModifiersState::LOGO; Action::CreateNewWindow;
         F, ModifiersState::CTRL | ModifiersState::LOGO; Action::ToggleFullscreen;
         C, ModifiersState::LOGO; Action::Copy;
         C, ModifiersState::LOGO, +BindingMode::VI, ~BindingMode::SEARCH; Action::ClearSelection;
@@ -899,7 +899,7 @@ struct RawBinding {
 }
 
 impl RawBinding {
-    fn into_mouse_binding(self) -> Result<MouseBinding, Self> {
+    fn into_mouse_binding(self) -> Result<MouseBinding, Box<Self>> {
         if let Some(mouse) = self.mouse {
             Ok(Binding {
                 trigger: mouse,
@@ -909,11 +909,11 @@ impl RawBinding {
                 notmode: self.notmode,
             })
         } else {
-            Err(self)
+            Err(Box::new(self))
         }
     }
 
-    fn into_key_binding(self) -> Result<KeyBinding, Self> {
+    fn into_key_binding(self) -> Result<KeyBinding, Box<Self>> {
         if let Some(key) = self.key {
             Ok(KeyBinding {
                 trigger: key,
@@ -923,7 +923,7 @@ impl RawBinding {
                 notmode: self.notmode,
             })
         } else {
-            Err(self)
+            Err(Box::new(self))
         }
     }
 }
@@ -1187,7 +1187,7 @@ impl<'a> Deserialize<'a> for KeyBinding {
     }
 }
 
-/// Newtype for implementing deserialize on glutin Mods.
+/// Newtype for implementing deserialize on winit Mods.
 ///
 /// Our deserialize impl wouldn't be covered by a derive(Deserialize); see the
 /// impl below.
@@ -1242,7 +1242,7 @@ impl<'a> de::Deserialize<'a> for ModsWrapper {
 mod tests {
     use super::*;
 
-    use glutin::event::ModifiersState;
+    use winit::event::ModifiersState;
 
     type MockBinding = Binding<usize>;
 

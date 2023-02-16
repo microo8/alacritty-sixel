@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::ptr;
 
 use crossfont::{BitmapBuffer, RasterizedGlyph};
@@ -52,6 +53,11 @@ pub struct Atlas {
     ///
     /// This is used as the advance when end of row is reached.
     row_tallest: i32,
+
+    /// Gles context.
+    ///
+    /// This affects the texture loading.
+    is_gles_context: bool,
 }
 
 /// Error that can happen when inserting a texture to the Atlas.
@@ -64,7 +70,7 @@ pub enum AtlasInsertError {
 }
 
 impl Atlas {
-    pub fn new(size: i32) -> Self {
+    pub fn new(size: i32, is_gles_context: bool) -> Self {
         let mut id: GLuint = 0;
         unsafe {
             gl::PixelStorei(gl::UNPACK_ALIGNMENT, 1);
@@ -92,7 +98,15 @@ impl Atlas {
             gl::BindTexture(gl::TEXTURE_2D, 0);
         }
 
-        Self { id, width: size, height: size, row_extent: 0, row_baseline: 0, row_tallest: 0 }
+        Self {
+            id,
+            width: size,
+            height: size,
+            row_extent: 0,
+            row_baseline: 0,
+            row_tallest: 0,
+            is_gles_context,
+        }
     }
 
     pub fn clear(&mut self) {
@@ -133,8 +147,8 @@ impl Atlas {
     fn insert_inner(&mut self, glyph: &RasterizedGlyph, active_tex: &mut u32) -> Glyph {
         let offset_y = self.row_baseline;
         let offset_x = self.row_extent;
-        let height = glyph.height as i32;
-        let width = glyph.width as i32;
+        let height = glyph.height;
+        let width = glyph.width;
         let multicolor;
 
         unsafe {
@@ -144,11 +158,24 @@ impl Atlas {
             let (format, buffer) = match &glyph.buffer {
                 BitmapBuffer::Rgb(buffer) => {
                     multicolor = false;
-                    (gl::RGB, buffer)
+                    // Gles context doesn't allow uploading RGB data into RGBA texture, so need
+                    // explicit copy.
+                    if self.is_gles_context {
+                        let mut new_buffer = Vec::with_capacity(buffer.len() / 3 * 4);
+                        for rgb in buffer.chunks_exact(3) {
+                            new_buffer.push(rgb[0]);
+                            new_buffer.push(rgb[1]);
+                            new_buffer.push(rgb[2]);
+                            new_buffer.push(u8::MAX);
+                        }
+                        (gl::RGBA, Cow::Owned(new_buffer))
+                    } else {
+                        (gl::RGB, Cow::Borrowed(buffer))
+                    }
                 },
                 BitmapBuffer::Rgba(buffer) => {
                     multicolor = true;
-                    (gl::RGBA, buffer)
+                    (gl::RGBA, Cow::Borrowed(buffer))
                 },
             };
 
@@ -196,9 +223,9 @@ impl Atlas {
 
     /// Check if there's room in the current row for given glyph.
     pub fn room_in_row(&self, raw: &RasterizedGlyph) -> bool {
-        let next_extent = self.row_extent + raw.width as i32;
+        let next_extent = self.row_extent + raw.width;
         let enough_width = next_extent <= self.width;
-        let enough_height = (raw.height as i32) < (self.height - self.row_baseline);
+        let enough_height = raw.height < (self.height - self.row_baseline);
 
         enough_width && enough_height
     }
@@ -232,9 +259,13 @@ impl Atlas {
         match atlas[*current_atlas].insert(rasterized, active_tex) {
             Ok(glyph) => glyph,
             Err(AtlasInsertError::Full) => {
+                // Get the context type before adding a new Atlas.
+                let is_gles_context = atlas[*current_atlas].is_gles_context;
+
+                // Advance the current Atlas index.
                 *current_atlas += 1;
                 if *current_atlas == atlas.len() {
-                    let new = Atlas::new(ATLAS_SIZE);
+                    let new = Atlas::new(ATLAS_SIZE, is_gles_context);
                     *active_tex = 0; // Atlas::new binds a texture. Ugh this is sloppy.
                     atlas.push(new);
                 }

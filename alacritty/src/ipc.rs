@@ -6,9 +6,9 @@ use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::PathBuf;
 use std::{env, fs, process};
 
-use glutin::event_loop::EventLoopProxy;
-use glutin::window::WindowId;
 use log::warn;
+use winit::event_loop::EventLoopProxy;
+use winit::window::WindowId;
 
 use alacritty_terminal::thread;
 
@@ -119,7 +119,7 @@ fn find_socket(socket_path: Option<PathBuf>) -> IoResult<UnixStream> {
     // Handle environment variable.
     if let Ok(path) = env::var(ALACRITTY_SOCKET_ENV) {
         let socket_path = PathBuf::from(path);
-        if let Ok(socket) = UnixStream::connect(&socket_path) {
+        if let Ok(socket) = UnixStream::connect(socket_path) {
             return Ok(socket);
         }
     }

@@ -210,7 +210,7 @@ impl TermDamageState {
     /// Damage point inside of the viewport.
     #[inline]
     fn damage_point(&mut self, point: Point<usize>) {
-        self.damage_line(point.line, point.column.0 as usize, point.column.0 as usize);
+        self.damage_line(point.line, point.column.0, point.column.0);
     }
 
     /// Expand `line`'s damage to span at least `left` to `right` column.
@@ -236,7 +236,7 @@ impl TermDamageState {
         };
 
         let start = cmp::max(selection.start.line.0 + display_offset, 0);
-        let end = cmp::min(cmp::max(selection.end.line.0 + display_offset, 0), last_visible_line);
+        let end = (selection.end.line.0 + display_offset).clamp(0, last_visible_line);
         for line in start as usize..=end as usize {
             self.damage_line(line, 0, num_cols - 1);
         }
@@ -1199,7 +1199,7 @@ impl<T: EventListener> Handler for Term<T> {
             Some('>') => {
                 trace!("Reporting secondary device attributes");
                 let version = version_number(env!("CARGO_PKG_VERSION"));
-                let text = format!("\x1b[>0;{};1c", version);
+                let text = format!("\x1b[>0;{version};1c");
                 self.event_proxy.send_event(Event::PtyWrite(text));
             },
             _ => debug!("Unsupported device attributes intermediate"),
@@ -1274,7 +1274,7 @@ impl<T: EventListener> Handler for Term<T> {
 
         if self.grid.cursor.point.column > Column(0) {
             let line = self.grid.cursor.point.line.0 as usize;
-            let column = self.grid.cursor.point.column.0 as usize;
+            let column = self.grid.cursor.point.column.0;
             self.grid.cursor.point.column -= 1;
             self.grid.cursor.input_needs_wrap = false;
             self.damage.damage_line(line, column - 1, column);
@@ -1488,6 +1488,7 @@ impl<T: EventListener> Handler for Term<T> {
         let point = cursor.point;
 
         let (left, right) = match mode {
+            ansi::LineClearMode::Right if cursor.input_needs_wrap => return,
             ansi::LineClearMode::Right => (point.column, Column(self.columns())),
             ansi::LineClearMode::Left => (Column(0), point.column + 1),
             ansi::LineClearMode::All => (Column(0), Column(self.columns())),
@@ -1577,7 +1578,7 @@ impl<T: EventListener> Handler for Term<T> {
         self.event_proxy.send_event(Event::ClipboardLoad(
             clipboard_type,
             Arc::new(move |text| {
-                let base64 = base64::encode(&text);
+                let base64 = base64::encode(text);
                 format!("\x1b]52;{};{}{}", clipboard as char, base64, terminator)
             }),
         ));
@@ -1988,7 +1989,7 @@ impl<T: EventListener> Handler for Term<T> {
         self.event_proxy.send_event(Event::TextAreaSizeRequest(Arc::new(move |window_size| {
             let height = window_size.num_lines * window_size.cell_height;
             let width = window_size.num_cols * window_size.cell_width;
-            format!("\x1b[4;{};{}t", height, width)
+            format!("\x1b[4;{height};{width}t")
         })));
     }
 
@@ -2926,7 +2927,7 @@ mod tests {
         term.reset_damage();
         let vi_cursor_point = term.vi_mode_cursor.point;
         let line = vi_cursor_point.line.0 as usize;
-        let left = vi_cursor_point.column.0 as usize;
+        let left = vi_cursor_point.column.0;
         let right = left;
 
         let mut damaged_lines = match term.damage(None) {
