@@ -83,7 +83,7 @@ pub struct GraphicsShaderProgram {
 
 impl GraphicsShaderProgram {
     pub fn new(shader_version: ShaderVersion) -> Result<Self, renderer::Error> {
-        let program = ShaderProgram::new(shader_version, GRAPHICS_SHADER_V, GRAPHICS_SHADER_F)?;
+        let program = ShaderProgram::new(shader_version, None, GRAPHICS_SHADER_V, GRAPHICS_SHADER_F)?;
 
         let u_cell_dimensions;
         let u_view_dimensions;
